@@ -63,6 +63,7 @@ KELURAHAN:
 LEPAS JAHITAN:
 BOLONG:
 KURANG:
+Busuk :
 
 💧 *KENDALA RETUR MINYAK*
 *(TOLONG ISI DENGAN JUMLAH LITER BUKAN POUCH)*
@@ -72,6 +73,7 @@ KURANG:
 
 👤 *DATA DIRI*
 NAMA KORCAM:
+No Hp:
 
 📅 *WAKTU RETUR*
 KAPAN INGIN DI RETUR:
@@ -103,6 +105,9 @@ TERIMAKASIH...`;
         timestamp: new Date().toLocaleString("id-ID"),
         namaKorcam:
           originalText.match(/NAMA KORCAM:[ \t]*([^\n\r]*)/)?.[1]?.trim() || "",
+        noHp:
+          "'" +
+          (originalText.match(/No Hp:[ \t]*([^\n\r]*)/)?.[1]?.trim() || ""),
         waktuRetur:
           originalText
             .match(/KAPAN INGIN DI RETUR:[ \t]*([^\n\r]*)/)?.[1]
@@ -132,6 +137,11 @@ TERIMAKASIH...`;
             .match(/KURANG:\s*(.*)/)?.[1]
             ?.replace(/[^0-9]/g, "")
             .trim() || "0",
+        BerasRusak:
+          bagianBeras
+            .match(/Busuk:\s*(.*)/)?.[1]
+            ?.replace(/[^0-9]/g, "")
+            .trim() || "0",
 
         // Kendala Minyak (Hanya mengambil dari bagianMinyak)
         minyakBocor:
@@ -151,7 +161,8 @@ TERIMAKASIH...`;
         !dataRetur.namaKorcam ||
         !dataRetur.kota ||
         !dataRetur.kecamatan ||
-        !dataRetur.kelurahan
+        !dataRetur.kelurahan ||
+        !dataRetur.noHp
       ) {
         return message.reply(
           "❌ Gagal memproses. Mohon pastikan DATA KORCAM dan WILAYAH sudah diisi.",
@@ -181,8 +192,11 @@ TERIMAKASIH...`;
         dataRetur.berasLepas, // Kolom G
         dataRetur.berasBolong, // Kolom H
         dataRetur.berasKurang, // Kolom I
+        dataRetur.BerasRusak,
         dataRetur.minyakBocor, // Kolom J
         dataRetur.minyakKurang, // Kolom K
+        "Belum di retur",
+        dataRetur.noHp,
       ];
 
       console.log("Data yang akan dikirim:", barisData);
@@ -190,7 +204,7 @@ TERIMAKASIH...`;
       // 5. Masukkan data ke Google Sheets (Append)
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: "Sheet1!A:K", // Jangkauan disesuaikan sampai kolom K (11 kolom)
+        range: "Sheet1!A:O", // Jangkauan disesuaikan sampai kolom K (11 kolom)
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: [barisData],
@@ -206,6 +220,71 @@ TERIMAKASIH...`;
       await message.reply(
         "❌ Terjadi kesalahan sistem saat menyimpan data. Mohon hubungi admin.",
       );
+    }
+  } else if (messageBody.includes("cari")) {
+    const searchMessage = message.body;
+
+    const auth = new google.auth.JWT({
+      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+
+      key: cleanPrivateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    await auth.authorize();
+
+    const sheets = google.sheets({ version: "v4", auth: auth });
+
+    // ambil kata setelah "cari"
+    const result = searchMessage.match(/^cari\s+(.+)$/i);
+
+    if (result) {
+      const keyword = result[1].trim().toLowerCase();
+
+      // ambil data dari spreadsheet
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: "Sheet1!A:O",
+      });
+
+      const rows = response.data.values;
+      console.log(rows);
+
+      if (!rows || rows.length === 0) {
+        await message.reply("Data tidak ditemukan");
+        return;
+      }
+
+      // cari data yang exact match
+      const found = rows.find((row) =>
+        row.some((cell) => String(cell).toLowerCase() === keyword),
+      );
+      console.log(found);
+      const pesan = `
+      📋 *DATA DITEMUKAN*
+
+      👤 Korcam        : ${found[1]}
+      📅 Tanggal Retur : ${found[2]}
+      📱 No HP          : ${found[13]}
+      📌 Status         : ${found[12]}
+
+      📍 *Wilayah*
+          - Kota     : ${found[3]}
+          - Kecamatan: ${found[4]}
+          - Kelurahan: ${found[5]}
+
+      📦 Detail
+        - Beras Lepas Jahit : ${found[6]}
+        - Beras Bolong : ${found[7]}
+        - Beras Kurang : ${found[8]}
+        - Beras Rusak : ${found[9]}
+        - Minyak Bocor : ${found[10]}
+        - Minyak Kurang : ${found[11]}
+      `;
+      if (found) {
+        await message.reply(`\n${pesan}`);
+      } else {
+        await message.reply("Data tidak ditemukan");
+      }
     }
   }
 });
