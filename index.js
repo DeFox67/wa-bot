@@ -226,7 +226,6 @@ TERIMAKASIH...`;
 
     const auth = new google.auth.JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-
       key: cleanPrivateKey,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
@@ -250,7 +249,7 @@ TERIMAKASIH...`;
       console.log(rows);
 
       if (!rows || rows.length === 0) {
-        await message.reply("Data tidak ditemukan");
+        await message.reply("Data di spreadsheet kosong.");
         return;
       }
 
@@ -258,33 +257,41 @@ TERIMAKASIH...`;
       const found = rows.find((row) =>
         row.some((cell) => String(cell).toLowerCase() === keyword),
       );
-      console.log(found);
-      const pesan = `
-      📋 *DATA DITEMUKAN*
 
-      👤 Korcam        : ${found[1]}
-      📅 Tanggal Retur : ${found[2]}
-      📱 No HP          : ${found[13]}
-      📌 Status         : ${found[12]}
+      console.log("Hasil pencarian:", found);
 
-      📍 *Wilayah*
-          - Kota     : ${found[3]}
-          - Kecamatan: ${found[4]}
-          - Kelurahan: ${found[5]}
-
-      📦 Detail
-        - Beras Lepas Jahit : ${found[6]}
-        - Beras Bolong : ${found[7]}
-        - Beras Kurang : ${found[8]}
-        - Beras Rusak : ${found[9]}
-        - Minyak Bocor : ${found[10]}
-        - Minyak Kurang : ${found[11]}
-      `;
-      if (found) {
-        await message.reply(`\n${pesan}`);
-      } else {
-        await message.reply("Data tidak ditemukan");
+      // SANGAT PENTING: Cek dulu 'found' ada atau tidak sebelum membaca index [1], [2], dst.
+      if (!found) {
+        await message.reply(
+          `Data dengan kata kunci "${keyword}" tidak ditemukan.`,
+        );
+        return; // Hentikan fungsi di sini agar tidak lanjut ke bawah
       }
+
+      // Jika lolos pengecekan di atas, berarti 'found' PASTI ada datanya. Baru aman dirangkai string-nya.
+      const pesan = `
+📋 *DATA DITEMUKAN*
+
+👤 Korcam        : ${found[1] || "-"}
+📅 Tanggal Retur : ${found[2] || "-"}
+📱 No HP          : ${found[13] || "-"}
+📌 Status         : ${found[12] || "-"}
+
+📍 *Wilayah*
+    - Kota     : ${found[3] || "-"}
+    - Kecamatan: ${found[4] || "-"}
+    - Kelurahan: ${found[5] || "-"}
+
+📦 Detail
+  - Beras Lepas Jahit : ${found[6] || 0}
+  - Beras Bolong : ${found[7] || 0}
+  - Beras Kurang : ${found[8] || 0}
+  - Beras Rusak : ${found[9] || 0}
+  - Minyak Bocor : ${found[10] || 0}
+  - Minyak Kurang : ${found[11] || 0}
+`;
+
+      await message.reply(pesan.trim());
     }
   }
 });
